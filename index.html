@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🕵️ 스파이 게임</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; height:100%; font-family:'Jua', sans-serif; }
+  body {
+    background: linear-gradient(160deg, #1a2a3a 0%, #2c3e50 100%);
+    color:#333; display:flex; align-items:center; justify-content:center;
+    min-height:100vh; overflow-x:hidden;
+  }
+  .wrap { width:min(560px, 96vw); padding:16px; }
+  .card {
+    background:#fff; border-radius:22px; padding:26px 24px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.45);
+  }
+  h1 { text-align:center; color:#D84315; font-size:30px; margin:4px 0 2px; }
+  .sub { text-align:center; color:#999; font-size:13px; margin-bottom:20px; }
+  input.txt {
+    width:100%; padding:13px 14px; border:2px solid #FFCC80; border-radius:12px;
+    font-family:'Jua'; font-size:16px; outline:none; margin-bottom:12px;
+  }
+  input.txt:focus { border-color:#FF7043; }
+  .btn {
+    border:none; border-radius:14px; font-family:'Jua'; cursor:pointer;
+    font-size:16px; padding:13px 18px; color:#fff; width:100%;
+    transition:transform .06s ease, filter .12s ease;
+  }
+  .btn:active { transform:scale(0.97); }
+  .btn:disabled { filter:grayscale(0.7) opacity(0.55); cursor:not-allowed; }
+  .btn-org  { background:linear-gradient(135deg,#FF7043,#D84315); }
+  .btn-blue { background:linear-gradient(135deg,#42A5F5,#1565C0); }
+  .btn-green{ background:linear-gradient(135deg,#66BB6A,#2E7D32); }
+  .btn-gray { background:#90A4AE; }
+  .row { display:flex; gap:10px; }
+  .row .btn { width:auto; flex:1; }
+  .hidden { display:none !important; }
+  /* 접속 모둠 칩 */
+  .members { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 4px; min-height:34px; }
+  .chip {
+    background:#E3F2FD; color:#1565C0; border:2px solid #90CAF9;
+    border-radius:20px; padding:6px 14px; font-size:14px;
+  }
+  .counter { text-align:center; color:#607D8B; font-size:13px; margin:10px 0; }
+  .phase-badge {
+    display:inline-block; background:#FFF3E0; color:#E65100;
+    border:2px dashed #FFB74D; border-radius:10px; padding:5px 12px;
+    font-size:13px; margin:0 auto 14px; text-align:center;
+  }
+  .center { text-align:center; }
+  /* 모달 */
+  .modal-bg {
+    position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9000;
+    display:flex; align-items:center; justify-content:center; padding:16px;
+  }
+  .modal {
+    background:#fff; border-radius:20px; padding:26px 26px; text-align:center;
+    width:min(420px, 94vw); max-height:92vh; overflow:auto;
+    box-shadow:0 16px 48px rgba(0,0,0,0.5);
+  }
+  .hide-note {
+    background:#FFF3E0; border:2px dashed #FFB74D; border-radius:10px;
+    padding:8px 12px; font-size:12px; color:#E65100; margin-bottom:14px;
+  }
+  .bigword { font-size:40px; font-weight:bold; color:#5D4037; margin:14px 0; }
+  .toast {
+    position:fixed; bottom:26px; left:50%; transform:translateX(-50%);
+    background:rgba(216,67,21,0.95); color:#fff; padding:11px 20px;
+    border-radius:16px; font-size:14px; z-index:9500; box-shadow:0 4px 14px rgba(0,0,0,0.35);
+  }
+  .result-line { font-size:15px; color:#444; margin:8px 0; line-height:1.5; }
+  .result-line b { color:#D84315; }
+  .tally-item { display:flex; justify-content:space-between; padding:5px 10px;
+    background:#F5F5F5; border-radius:8px; margin:4px 0; font-size:14px; }
+  textarea.words {
+    width:100%; min-height:220px; padding:10px; border:2px solid #FFE082;
+    border-radius:10px; font-family:'Jua'; font-size:14px; line-height:1.7; resize:vertical;
+  }
+  .topictab { padding:6px 12px; border:2px solid #FFE082; border-radius:10px;
+    cursor:pointer; font-family:'Jua'; font-size:13px; background:#fff; color:#5D4037; }
+  .topictab.on { background:#FFB74D; color:#fff; }
+  .tabbar { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .link { color:#78909C; font-size:13px; text-align:center; cursor:pointer; margin-top:14px; }
+  .link:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== 로그인 ===== -->
+  <div id="loginView" class="card">
+    <h1>🕵️ 스파이 게임</h1>
+    <div class="sub">모둠 이름을 입력하고 입장하세요 (예: 1모둠)</div>
+    <input id="loginId" class="txt" placeholder="모둠 이름" autocomplete="off">
+    <button class="btn btn-org" onclick="doLogin()">입장하기</button>
+  </div>
+
+  <!-- ===== 교사 화면 ===== -->
+  <div id="teacherView" class="card hidden">
+    <button onclick="logout()" style="position:fixed;top:12px;right:12px;z-index:50;background:rgba(255,255,255,0.9);border:1.5px solid #E0E0E0;color:#78909C;border-radius:20px;padding:7px 14px;font-family:inherit;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.12);">← 나가기</button>
+    <h1 style="font-size:24px;">👩‍🏫 교사 진행</h1>
+    <div class="center phase-badge" id="tPhase">대기 중</div>
+    <div class="counter">접속 모둠 <b id="tCount">0</b>명</div>
+    <div class="members" id="tMembers"></div>
+    <div id="tOrder"></div>
+    <div style="margin-top:18px;">
+      <button class="btn btn-org" id="btnSend" onclick="confirmSend()">📨 단어 발송</button>
+      <button class="btn btn-blue" style="margin-top:10px;" onclick="drawOrder()">🎲 발표 순서 뽑기</button>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn btn-blue" id="btnVote" onclick="teacherVote()" disabled>🗳️ 투표 시작</button>
+        <button class="btn btn-green" id="btnReveal" onclick="teacherReveal()" disabled>🎁 공개</button>
+      </div>
+      <button class="btn btn-gray" style="margin-top:10px;" onclick="teacherReset()">🔄 초기화</button>
+    </div>
+    <div class="counter hidden" id="tSubmitInfo"></div>
+    <div id="tScoreboard"></div>
+    <div class="link" onclick="openSettings()">🛠️ 게임 설정 (카테고리·스파이·힌트)</div>
+    <div class="link" onclick="openWordEditor()">⚙️ 단어은행 편집</div>
+  </div>
+
+  <!-- ===== 모둠(학생) 화면 ===== -->
+  <div id="studentView" class="card hidden">
+    <button onclick="logout()" style="position:fixed;top:12px;right:12px;z-index:50;background:rgba(255,255,255,0.9);border:1.5px solid #E0E0E0;color:#78909C;border-radius:20px;padding:7px 14px;font-family:inherit;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.12);">← 나가기</button>
+    <h1 style="font-size:24px;" id="sTitle">🕵️ 대기 중</h1>
+    <div id="sOrder" class="center" style="display:none;"></div>
+    <div class="center phase-badge" id="sPhase">교사의 시작을 기다려요</div>
+    <div id="sBody" class="center"></div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   스파이 게임 — 독립 사이트
+   ★이벤트 상점.html 라이어게임(normal 모드) 로직 포팅
+   RTDB 경로는 이벤트 상점과 분리: ClassData/SpyGame/room1
+   ============================================================ */
+
+// ---- Firebase (이벤트 상점과 동일 프로젝트) ----
+const firebaseConfig = {
+  apiKey: "AIzaSyCzsI9FW3bga1V73lCR7pNgfPLdcqcbsgM",
+  authDomain: "class-manager-bad00.firebaseapp.com",
+  databaseURL: "https://class-manager-bad00-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "class-manager-bad00",
+  storageBucket: "class-manager-bad00.firebasestorage.app",
+  messagingSenderId: "436830301778",
+  appId: "1:436830301778:web:d3da11a5ac0e6c252d798b",
+  measurementId: "G-H95D2Z7MFF"
+};
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+const ROOM = 'ClassData/SpyGame/room1';
+function gref(){ return firebase.database().ref(ROOM); }
+
+const TEACHER_PW = 'csgo10';
+const MIN_GROUPS = 3;
+// 교사가 지정한 모둠 이름 — 이 목록에 있는 이름으로만 입장 가능
+const ALLOWED_GROUPS = ['1모둠','2모둠','3모둠','4모둠','5모둠','6모둠'];
+
+// ---- 기본 단어은행 (LIAR_WORDS 복사) ----
+const DEFAULT_WORDS = {
+  '음식': ['김치','라면','피자','짜장면','햄버거','떡볶이','김밥','치킨','초밥','빵','삼겹살','비빔밥','파스타','샐러드','아이스크림','케이크','만두','갈비','떡국','순두부'],
+  '장소': ['학교','집','도서관','놀이터','영화관','식당','공원','시장','병원','박물관','수영장','놀이공원','지하철','공항','산','바다','우주','정글','사막','동굴'],
+  '운동': ['축구','야구','농구','배구','수영','달리기','태권도','골프','탁구','배드민턴','테니스','복싱','스키','스케이트','요가','등산','자전거','체조','펜싱','양궁'],
+  '동물': ['강아지','고양이','코끼리','호랑이','토끼','사자','곰','원숭이','기린','거북이','펭귄','독수리','상어','돌고래','북극곰','악어','다람쥐','부엉이','캥거루','판다'],
+  '직업': ['선생님','의사','경찰관','소방관','요리사','운동선수','가수','배우','화가','농부','파일럿','과학자','프로그래머','유튜버','만화가','목수','바리스타','수의사','기자','군인'],
+  '물건': ['연필','책','가방','시계','우산','컴퓨터','자전거','휴대폰','거울','의자','텔레비전','냉장고','선풍기','전화기','카메라','안경','지갑','신발','모자','베개']
+};
+function getWords(){
+  try {
+    const raw = localStorage.getItem('spyWords');
+    if(!raw) return DEFAULT_WORDS;
+    const custom = JSON.parse(raw);
+    const merged = {};
+    Object.keys(DEFAULT_WORDS).forEach(t => {
+      merged[t] = (Array.isArray(custom[t]) && custom[t].length) ? custom[t] : DEFAULT_WORDS[t];
+    });
+    return merged;
+  } catch(_){ return DEFAULT_WORDS; }
+}
+// 세션 내 중복 방지
+const _usedWords = {};
+
+// ---- 매칭 유틸 (라이어게임 _liarNorm/_liarMatchWord/_liarMatchPlayer 포팅) ----
+function norm(s){ return (s||'').replace(/\s+/g,'').toLowerCase().trim(); }
+function matchWord(input, target){ return norm(input) === norm(target); }
+function matchGroup(input, uids){
+  const n = norm(input);
+  if(!n) return null;
+  // 정확히 일치하는 이름만 인정 ("1"→"1모둠" 부분일치 금지, "1모둠"이라고 써야 함)
+  for(const uid of uids){ if(norm(memberName(uid)) === n) return uid; }
+  return null;
+}
+
+// ---- 상태 ----
+let ME = null;          // 모둠 uid (교사는 'teacher')
+let IS_TEACHER = false;
+let MEMBERS = {};       // {uid:{name}}
+let GAME = null;        // 공개 game state
+let MY_PRIV = null;     // 내 priv {role, word?, category}
+let SCORES = {};        // {uid: 누적점수}
+let SUBMITTED = {};     // {uid:true} 제출 완료 마커 (교사만 구독)
+let RESULT = null;      // 판 결과 블롭 (교사만 구독 — 학생은 결과창 없음)
+let ORDER = [];         // 발표 순서 (교사가 뽑음, 모두 구독)
+let MY_SUBMITTED = false;// 본인 제출 여부 (학생 — 재접속/새로고침 후에도 유지, 서버 기준)
+let MY_SCORE = 0;       // 본인 모둠 누적 점수 (학생 표시용)
+let _pendingScoreDelta = null; // 결과창을 닫을 때 반영할 점수 델타 (공개 시엔 미반영)
+let _resultShownFor = null;
+// 학생 로컬 제출 플래그 (game 노드를 오염시키지 않기 위해 서버 대신 로컬로 판단)
+let _myVoteRound = null;   // 이번 라운드에 투표/추측 제출했는가
+
+// ---- 게임 설정 (교사 기기 localStorage) ----
+function getSettings(){
+  const d = { categories:null, spyCount:1, spyHint:'category', mode:'normal' }; // categories=null → 전체
+  try {
+    const raw = localStorage.getItem('spySettings');
+    if(!raw) return d;
+    return Object.assign(d, JSON.parse(raw));
+  } catch(_){ return d; }
+}
+function saveSettings(s){ try { localStorage.setItem('spySettings', JSON.stringify(s)); } catch(_){} }
+// 사용 가능한 카테고리 목록 (설정 반영, 유효한 것만)
+function enabledCategories(){
+  const words = getWords();
+  const all = Object.keys(words);
+  const sel = getSettings().categories;
+  if(!sel || !sel.length) return all;
+  const filtered = sel.filter(c => all.includes(c) && (words[c]||[]).length);
+  return filtered.length ? filtered : all;
+}
+
+function memberName(uid){
+  const n = (MEMBERS[uid]||{}).name;
+  if(n) return n;
+  // 접속이 끊긴 모둠은 MEMBERS에 없음 → uid('g_'+이름)에서 이름 복원
+  return (uid||'').replace(/^g_/, '') || uid;
+}
+function memberUids(){ return Object.keys(MEMBERS); }
+
+// ============================================================
+//  로그인 / 로그아웃
+// ============================================================
+function doLogin(){
+  const raw = (document.getElementById('loginId').value||'').trim();
+  if(!raw){ toast('이름을 입력하세요'); return; }
+  if(raw === TEACHER_PW){
+    IS_TEACHER = true; ME = 'teacher';
+    show('teacherView');
+    subscribe();
+    return;
+  }
+  // 모둠 로그인 — 교사가 지정한 이름(ALLOWED_GROUPS)만 허용
+  const canonical = ALLOWED_GROUPS.find(g => norm(g) === norm(raw));
+  if(!canonical){ toast(ALLOWED_GROUPS[0] + '~' + ALLOWED_GROUPS[ALLOWED_GROUPS.length-1] + ' 중 하나로 입장하세요'); return; }
+  const uid = 'g_' + norm(canonical);
+  ME = uid;
+  IS_TEACHER = false;
+  gref().child('members/'+uid).set({ name: canonical, joinedAt: firebase.database.ServerValue.TIMESTAMP });
+  gref().child('members/'+uid).onDisconnect().remove();
+  document.getElementById('sTitle').textContent = '🕵️ ' + canonical;
+  show('studentView');
+  subscribe();
+}
+function logout(){
+  if(ME && !IS_TEACHER){ gref().child('members/'+ME).remove(); }
+  ME = null; IS_TEACHER = false; MY_PRIV = null;
+  _myVoteRound = null;
+  // 라운드 로컬 상태 초기화 — 안 하면 재접속 시 priv 재요청/힌트 자동표시가 건너뛰어짐
+  _privRound = null; _hintShownRound = null; _resultShownFor = null;
+  detach();
+  show('loginView');
+}
+function show(id){
+  ['loginView','teacherView','studentView'].forEach(v =>
+    document.getElementById(v).classList.toggle('hidden', v !== id));
+}
+
+// ============================================================
+//  실시간 구독
+// ============================================================
+let _refs = [];
+function _sub(ref, evt, cb){ ref.on(evt, cb); _refs.push([ref, evt, cb]); }
+function subscribe(){
+  detach();
+  // members는 child 단위 수신 — 접속/이탈 시 전체 리스트가 아니라 해당 모둠만 수신 (트래픽 절감)
+  MEMBERS = {};
+  const mRef = gref().child('members');
+  _sub(mRef, 'child_added',   s => { MEMBERS[s.key] = s.val(); renderAll(); });
+  _sub(mRef, 'child_changed', s => { MEMBERS[s.key] = s.val(); renderAll(); });
+  _sub(mRef, 'child_removed', s => { delete MEMBERS[s.key]; renderAll(); });
+
+  _sub(gref().child('game'), 'value', snap => { GAME = snap.val(); onGameChange(); });
+
+  // 발표 순서 — 교사·학생 모두 구독 (작은 배열, 뽑을 때만 변경)
+  _sub(gref().child('order'), 'value', snap => { ORDER = snap.val() || []; renderAll(); });
+
+  if(IS_TEACHER){
+    // 교사 전용 (학생 미수신 → game 재방송 없이 트래픽 절감)
+    _sub(gref().child('scores'),    'value', snap => { SCORES = snap.val() || {}; renderAll(); });
+    _sub(gref().child('submitted'), 'value', snap => { SUBMITTED = snap.val() || {}; renderAll(); }); // 완료 카운트
+    _sub(gref().child('result'),    'value', snap => { RESULT = snap.val(); renderAll(); });            // 결과 블롭
+  } else {
+    // 학생 본인 노드만 구독 (소량) — 제출여부는 재접속 후에도 유지, 본인 점수 표시
+    _sub(gref().child('submitted/'+ME), 'value', snap => { MY_SUBMITTED = !!snap.val(); renderAll(); });
+    _sub(gref().child('scores/'+ME),    'value', snap => { MY_SCORE = snap.val() || 0; renderAll(); });
+  }
+}
+function detach(){
+  _refs.forEach(([r, evt, cb]) => r.off(evt, cb));
+  _refs = [];
+  if(_privRef){ _privRef.off(); _privRef = null; }
+}
+
+let _privRef = null;
+let _privRound = null;
+function onGameChange(){
+  // 새 판이 시작되면 내 priv 재fetch (모둠 기기 전용)
+  if(!IS_TEACHER && GAME && GAME.on && GAME.round !== _privRound){
+    _privRound = GAME.round;
+    MY_PRIV = null;
+    _resultShownFor = null;
+    _myVoteRound = null;   // 새 판 → 로컬 제출 플래그 초기화
+    if(_privRef){ _privRef.off(); }
+    _privRef = gref().child('priv/'+ME);
+    _privRef.on('value', s => { MY_PRIV = s.val(); renderAll(); });
+  }
+  if(!GAME || !GAME.on){ _privRound = null; MY_PRIV = null; }
+  renderAll();
+}
+
+function renderAll(){
+  if(IS_TEACHER) renderTeacher();
+  else renderStudent();
+}
+
+// ============================================================
+//  교사 화면
+// ============================================================
+function renderTeacher(){
+  const uids = memberUids();
+  document.getElementById('tCount').textContent = uids.length;
+  document.getElementById('tMembers').innerHTML =
+    uids.map(u => `<span class="chip">${escapeHtml(memberName(u))}</span>`).join('') ||
+    '<span style="color:#B0BEC5;font-size:13px;">아직 접속한 모둠이 없어요</span>';
+
+  // 발표 순서 상시 표시 (뽑았을 때만)
+  const tOrderEl = document.getElementById('tOrder');
+  if(tOrderEl){
+    tOrderEl.innerHTML = ORDER.length
+      ? `<div style="background:#FFF3E0;border:1.5px solid #FFB74D;border-radius:10px;padding:8px 12px;margin:8px 0;font-size:14px;color:#E65100;">🎲 발표 순서: ${ORDER.map(u=>escapeHtml(memberName(u))).join(' → ')}</div>`
+      : '';
+  }
+
+  const phase = GAME && GAME.on ? GAME.phase : null;
+  const badge = document.getElementById('tPhase');
+  const info = document.getElementById('tSubmitInfo');
+  document.getElementById('btnSend').disabled  = false;
+  document.getElementById('btnVote').disabled   = !(phase === 'reveal');
+  const btnReveal = document.getElementById('btnReveal');
+  btnReveal.disabled = !(phase === 'vote');
+  btnReveal.textContent = '🎁 공개';
+
+  badge.style.display = 'none';   // 교사 화면 단계 표시 전부 숨김
+  if(!phase){ info.classList.add('hidden'); }
+  else if(phase === 'reveal'){ info.classList.add('hidden'); }
+  else if(phase === 'vote'){
+    const members = GAME.members || [];
+    const total = members.length;
+    const pending = members.filter(u => !(SUBMITTED && SUBMITTED[u]));   // 미제출 모둠
+    const submitted = total - pending.length;
+    const allDone = total > 0 && pending.length === 0;
+    info.classList.remove('hidden');
+    info.innerHTML = allDone
+      ? `<span style="color:#2E7D32;font-weight:bold;">✅ 모든 모둠 제출 완료! (${submitted}/${total}) — 🎁 공개하세요</span>`
+      : `제출 <b>${submitted}</b> / ${total} 모둠 <span style="color:#E65100;font-size:13px;">(미제출: ${pending.map(u=>escapeHtml(memberName(u))).join(', ')})</span>`;
+  } else if(phase === 'result'){
+    badge.textContent = '🎁 결과 공개됨';
+    info.classList.add('hidden');
+    maybeShowResult();
+  }
+  renderScoreboard();
+}
+
+// 점수판 (교사 화면) — 누적 승점 내림차순
+function renderScoreboard(){
+  const el = document.getElementById('tScoreboard');
+  if(!el) return;
+  const rows = Object.keys(SCORES).filter(u => SCORES[u]);
+  if(!rows.length){ el.innerHTML = ''; return; }
+  rows.sort((a,b) => (SCORES[b]||0) - (SCORES[a]||0));
+  const medal = i => ['🥇','🥈','🥉'][i] || '　';
+  el.innerHTML = `
+    <div style="margin:14px 0 6px;font-size:14px;color:#607D8B;text-align:center;">🏆 누적 승점</div>
+    ${rows.map((u,i) => `<div class="tally-item"><span>${medal(i)} ${escapeHtml(memberName(u))}</span><span>${SCORES[u]}점</span></div>`).join('')}
+    <div class="link" style="margin-top:6px;" onclick="resetScores()">🧹 점수 초기화</div>`;
+}
+function resetScores(){
+  if(!confirm('누적 승점을 모두 0으로 지울까요?')) return;
+  gref().child('scores').remove();
+  toast('🧹 점수를 초기화했어요');
+}
+
+// 단어 발송 — 게임이 진행 중이면 예쁜 확인창으로 한 번 더 물어봄 (실수 재발송 방지)
+function confirmSend(){
+  if(!(GAME && GAME.on)){ teacherSend(); return; }   // 대기 상태면 바로 발송
+  document.getElementById('sendConfirmModal')?.remove();
+  const html = `
+    <div class="modal-bg" id="sendConfirmModal" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="text-align:center;">
+        <div style="font-size:40px;margin-bottom:6px;">⚠️</div>
+        <div style="font-size:20px;font-weight:bold;color:#D84315;margin-bottom:8px;">다시 발송할까요?</div>
+        <div style="font-size:14px;color:#5D4037;line-height:1.6;">이미 진행 중인 판이 있어요.<br>새로 발송하면 <b>지금 판이 사라지고</b> 새 단어로 시작됩니다.</div>
+        <div class="row" style="margin-top:18px;">
+          <button class="btn btn-gray" onclick="document.getElementById('sendConfirmModal').remove()">취소</button>
+          <button class="btn btn-org" onclick="document.getElementById('sendConfirmModal').remove(); teacherSend();">📨 새로 발송</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function teacherSend(){
+  const uids = memberUids();
+  const st = getSettings();
+  const mode = (st.mode === 'fool') ? 'fool' : 'normal';
+  // 모드별 스파이 인원 / 최소 모둠 수
+  let spyCount = Math.max(1, Math.min(2, st.spyCount||1));
+  let needed;
+  if(mode === 'fool'){ spyCount = 1; needed = Math.max(MIN_GROUPS, 3); }
+  else { needed = Math.max(MIN_GROUPS, spyCount + 2); }         // 일반
+  if(uids.length < needed){
+    const who = mode==='fool' ? '바보 모드' : `스파이 ${spyCount}명`;
+    toast(`모둠이 ${needed}개 이상 필요해요 (현재 ${uids.length}, ${who})`); return;
+  }
+  const words = getWords();
+  // 설정된 카테고리 중 랜덤 (카테고리 섞기 옵션)
+  const cats = enabledCategories();
+  const category = cats[Math.floor(Math.random()*cats.length)];
+  const list = words[category] || [];
+  if(!_usedWords[category]) _usedWords[category] = new Set();
+  let avail = list.filter(w => !_usedWords[category].has(w));
+  if(avail.length === 0){ _usedWords[category].clear(); avail = list.slice(); }
+  const word = avail[Math.floor(Math.random()*avail.length)];
+  _usedWords[category].add(word);
+  // 바보 모드: 정답과 다른 단어 하나 더 추첨 (바보에게 지급)
+  let foolWord = null;
+  if(mode === 'fool'){
+    const foolAvail = list.filter(w => w !== word);
+    foolWord = foolAvail.length ? foolAvail[Math.floor(Math.random()*foolAvail.length)] : word;
+  }
+
+  // 역할 배정 — 매 판 순수 랜덤 (Fisher-Yates)
+  const shuffled = uids.slice();
+  for(let i = shuffled.length-1; i > 0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  // priv 분리 저장 (비밀은 공개 game에 두지 않음)
+  const priv = {};
+  if(mode === 'fool'){
+    const foolU = shuffled[0];
+    uids.forEach(uid => {
+      // 바보는 자신이 바보인 줄 모름 → 시민과 똑같이 '제시어'만 보이되 단어가 다름
+      priv[uid] = (uid === foolU)
+        ? { role:'fool', word: foolWord, category }
+        : { role:'citizen', word, category };
+    });
+  } else { // normal
+    const spies = new Set(shuffled.slice(0, spyCount));
+    uids.forEach(uid => {
+      if(spies.has(uid)){
+        priv[uid] = { role:'spy' };
+        if(st.spyHint === 'category') priv[uid].category = category;
+      } else {
+        priv[uid] = { role:'citizen', word, category };
+      }
+    });
+  }
+  const round = (GAME && GAME.round || 0) + 1;
+  const state = {
+    on:true, phase:'reveal', round,
+    category, members: uids, starter:'teacher',
+    mode, spyCount, spyHint: st.spyHint||'category',
+    executed:null
+  };
+  // 지난 판 제출 잔재(별도 노드) 제거 후 priv 먼저 → game 나중
+  gref().child('votes').remove();
+  gref().child('guesses').remove();
+  gref().child('submitted').remove();
+  gref().child('foolGuess').remove();
+  gref().child('result').remove();
+  gref().child('order').remove();   // 새 판 → 지난 발표 순서 정리
+  _resolving = false;   // 새 판 시작 → 가드 초기화
+  gref().child('priv').set(priv)
+    .then(() => gref().child('game').set(state))
+    .catch(e => console.error('발송 실패', e));
+  const label = mode==='fool' ? '바보' : `스파이 ${spyCount}명`;
+  toast(`📨 단어 발송 (${label})`);
+}
+
+function teacherVote(){
+  if(!GAME || GAME.phase !== 'reveal') return;
+  // 제출 잔재(별도 노드) 정리 후 페이즈만 전환 → game은 페이즈 전환에만 변경됨
+  _resolving = false;   // 새 투표 단계 시작 → 가드 초기화 (스턱 방지)
+  gref().child('votes').remove();
+  gref().child('guesses').remove();
+  gref().child('submitted').remove();
+  gref().child('game').update({ phase:'vote' });
+  toast('🗳️ 투표를 시작했어요');
+}
+
+let _resolving = false;   // 공개/결과확정 중복 실행(더블클릭) 방지 — 중복 채점 차단
+function teacherReveal(){
+  if(!GAME || GAME.phase !== 'vote') return;
+  if(_resolving) return;   // 이미 처리 중이면 무시 (async 완료 전 재클릭 차단)
+  _resolving = true;
+  const mode = GAME.mode || 'normal';
+  // 비밀은 공개 game에 없음 → priv에서 역할·정답 확정 후 집계
+  gref().child('priv').once('value', ps => {
+    const priv = ps.val() || {};
+    const spies = [], fools = [], citizenUids = [];
+    let word = null, foolWord = null;
+    Object.entries(priv).forEach(([uid, p]) => {
+      if(!p) return;
+      if(p.role === 'spy') spies.push(uid);
+      else if(p.role === 'fool'){ fools.push(uid); if(p.word) foolWord = p.word; }
+      else if(p.role === 'citizen'){ citizenUids.push(uid); if(p.word) word = p.word; }
+    });
+    // 스파이측 = 스파이 + 바보
+    const spySide = new Set([...spies, ...fools]);
+    gref().child('votes').once('value', vs => {
+      const votes = vs.val() || {};
+      const players = GAME.members || [];
+      // 집계는 '시민' 표만 (숨은 팀 표는 지목 결과에 반영 안 함)
+      const tally = {};
+      citizenUids.forEach(uid => {
+        if(!players.includes(uid)) return;
+        const t = votes[uid];
+        if(!t) return;
+        tally[t] = (tally[t]||0) + 1;
+      });
+      let tied = [], top = 0;
+      Object.keys(tally).forEach(t => {
+        if(tally[t] > top){ top = tally[t]; tied = [t]; }
+        else if(tally[t] === top) tied.push(t);
+      });
+      const executed = (tied.length === 1) ? tied[0] : null; // 동점이면 미지목
+      const caughtSpy = executed && spySide.has(executed);   // 스파이측 지목됨?
+
+      // 추측(guesses, 별도 노드) 반영해 최종 판정
+      gref().child('guesses').once('value', gsnap => {
+        const guesses = gsnap.val() || {};
+        // (일반) 스파이 / (바보) 바보가 투표 때 적은 단어가 정답인가
+        const guessOk    = spies.some(u => guesses[u] && matchWord(guesses[u], word));
+        const foolUid    = fools[0] || null;
+        const foolGuess  = foolUid ? (guesses[foolUid] || null) : null;
+        const foolGuessOk = !!(foolGuess && matchWord(foolGuess, word));
+        // 승부 판정 (일반·바보 동일 구조): 스파이측 안 잡히면 스파이측승 /
+        //   잡혀도 (스파이/바보가) 정답을 맞히면 스파이측승, 틀리면 시민승
+        const winner = (mode === 'fool')
+          ? (!caughtSpy ? 'spy' : (foolGuessOk ? 'spy' : 'citizen'))
+          : (caughtSpy ? (guessOk ? 'spy' : 'citizen') : 'spy');
+        // 점수 델타 계산만 (실제 반영은 교사가 결과창을 '닫을 때')
+        const scoreDelta = {};
+        if(winner === 'spy') [...spySide].forEach(u => scoreDelta[u] = 1);
+        else citizenUids.forEach(u => scoreDelta[u] = 1);
+        // 결과 블롭은 별도 노드(교사만 구독) — 학생에겐 방송하지 않음. result 먼저 → game phase 나중
+        const resultData = { winner, executed: executed||null, tally, mode,
+                  spies, fools, word, foolWord,
+                  category: GAME.category, guesses, guessOk,
+                  foolGuess, foolGuessOk, scoreDelta };
+        gref().child('result').set(resultData)
+          .then(() => gref().child('game').update({ phase:'result' }))
+          .then(() => { _resolving = false; })
+          .catch(() => { _resolving = false; });
+        toast('🎁 결과를 공개했어요');
+      });
+    });
+  });
+}
+
+function teacherReset(){
+  if(!confirm('현재 판을 지우고 초기화할까요?')) return;
+  gref().child('game').remove();
+  gref().child('priv').remove();
+  gref().child('votes').remove();
+  gref().child('guesses').remove();
+  gref().child('submitted').remove();
+  gref().child('foolGuess').remove();
+  gref().child('result').remove();
+  gref().child('order').remove();
+  document.getElementById('spyResultModal')?.remove();
+  _resultShownFor = null;
+  _resolving = false;
+  _pendingScoreDelta = null;   // 초기화 시 미반영 점수 폐기
+}
+
+// 🎲 발표 순서 뽑기 — 접속 모둠을 랜덤 정렬해 order 노드에 기록 (학생 화면에 각자 순서 표시)
+function drawOrder(){
+  const uids = memberUids();
+  if(uids.length < 2){ toast('모둠이 2개 이상 필요해요'); return; }
+  const arr = uids.slice();
+  for(let i=arr.length-1; i>0; i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  gref().child('order').set(arr);
+  const rows = arr.map((u,i) => `<div class="tally-item"><span><b style="color:#E65100;">${i+1}번</b> &nbsp;${escapeHtml(memberName(u))}</span></div>`).join('');
+  document.getElementById('orderModal')?.remove();
+  const html = `
+    <div class="modal-bg" id="orderModal" onclick="if(event.target===this)this.remove()">
+      <div class="modal">
+        <div style="font-size:22px;font-weight:bold;color:#E65100;margin-bottom:10px;">🎲 발표 순서</div>
+        ${rows}
+        <div style="font-size:12px;color:#888;margin-top:8px;">학생 화면에도 각자 순서가 표시됩니다.</div>
+        <button class="btn btn-org" style="margin-top:16px;" onclick="document.getElementById('orderModal').remove()">닫기</button>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+// 결과 모달 — 교사 기기에서만
+function maybeShowResult(){
+  if(!IS_TEACHER) return;   // 결과창은 교사에게만
+  if(!GAME || GAME.phase !== 'result' || !RESULT) return;
+  if(_resultShownFor === GAME.round) return;
+  _resultShownFor = GAME.round;
+  _pendingScoreDelta = RESULT.scoreDelta || {};   // 닫을 때 반영할 점수
+  showResultModal();
+}
+// 결과창 닫기 — 점수를 반영하고 판을 종료(대기 화면으로) → 점수만 늘고 나머지는 초기화
+function closeResult(){
+  if(_pendingScoreDelta){
+    const sd = _pendingScoreDelta; _pendingScoreDelta = null;
+    Object.entries(sd).forEach(([u, d]) => {
+      gref().child('scores/'+u).transaction(cur => (cur||0) + d);
+    });
+    if(Object.keys(sd).length) toast('🏆 점수를 반영했어요');
+  }
+  document.getElementById('spyResultModal')?.remove();
+  // 판 종료 → 학생·교사 모두 대기 화면 (점수는 유지)
+  gref().child('game').remove();
+  gref().child('priv').remove();
+  gref().child('votes').remove();
+  gref().child('guesses').remove();
+  gref().child('submitted').remove();
+  gref().child('foolGuess').remove();
+  gref().child('result').remove();
+  gref().child('order').remove();
+  _resultShownFor = null;
+  _resolving = false;
+}
+function showResultModal(){
+  const r = RESULT;
+  if(!r) return;
+  const mode = r.mode || 'normal';
+  const spies = r.spies || (r.spyUid ? [r.spyUid] : []);   // 구버전 호환
+  const fools = r.fools || [];
+  const spySide = new Set([...spies, ...fools]);
+  const winTxt = r.winner === 'citizen'
+    ? '🙋 시민 승리!'
+    : (mode==='fool' ? '🤡 바보 승리!' : '🕵️ 스파이 승리!');
+  const winColor = r.winner === 'citizen' ? '#2E7D32' : '#1565C0';
+  const roleOf = u => spies.includes(u) ? '🕵️스파이'
+    : fools.includes(u) ? '🤡바보' : '🙋시민';
+
+  // ① 정답 공개 (바보 모드는 바보가 받은 다른 단어도 함께)
+  let answerLine = `<div class="result-line">📍 정답 단어: <b>${escapeHtml(r.word)}</b> <span style="color:#999;font-size:13px;">(${escapeHtml(r.category)})</span></div>`;
+  if(mode === 'fool' && r.foolWord){
+    answerLine += `<div class="result-line" style="color:#D84315;">🤡 바보 단어: <b>${escapeHtml(r.foolWord)}</b></div>`;
+  }
+
+  // ② (일반 모드) 스파이가 적은 답 공개
+  const spyLines = (mode === 'normal') ? spies.map(u => {
+    const g = (r.guesses||{})[u];
+    const gtxt = g ? `${escapeHtml(g)} ${matchWord(g, r.word) ? '✅' : '❌'}` : '(미제출)';
+    return `<div class="result-line">🕵️ 스파이 <b>${escapeHtml(memberName(u))}</b> — 적은 답: ${gtxt}</div>`;
+  }).join('') : '';
+  // (바보 모드) 잡힌 바보의 최후 추측 결과
+  const foolGuessLine = (mode === 'fool' && r.foolGuess != null)
+    ? `<div class="result-line">🤡 바보가 적은 단어: <b>${escapeHtml(r.foolGuess)}</b> ${r.foolGuessOk ? '✅ 정답! 바보 승' : '❌'}</div>`
+    : '';
+
+  // ③ 모둠별 득표 및 각각의 정체 공개
+  const identityRows = (GAME.members||[]).map(u => {
+    const role = roleOf(u);
+    const executed = (u === r.executed) ? ' · 🗳️지목됨' + (spySide.has(u) ? ' ✅' : ' ❌') : '';
+    const c = (r.tally && r.tally[u]) || 0;
+    return `<div class="tally-item"><span>${escapeHtml(memberName(u))} <span style="font-size:12px;color:#888;">${role}${executed}</span></span><span>${c}표</span></div>`;
+  }).join('');
+  const executedNote = r.executed ? '' : '<div style="color:#B0BEC5;font-size:13px;">동점 — 지목 실패</div>';
+
+  const sd = r.scoreDelta || {};
+  const scoreTxt = Object.keys(sd).length
+    ? Object.keys(sd).map(u => `${escapeHtml(memberName(u))} +${sd[u]}`).join(' · ')
+    : '';
+
+  document.getElementById('spyResultModal')?.remove();
+  const html = `
+    <div class="modal-bg" id="spyResultModal" onclick="if(event.target===this)closeResult()">
+      <div class="modal">
+        <div style="font-size:30px;font-weight:bold;color:${winColor};margin-bottom:10px;">${winTxt}</div>
+        ${answerLine}
+        ${spyLines}
+        ${foolGuessLine}
+        <div style="margin:14px 0 6px;font-size:14px;color:#607D8B;">모둠별 득표 및 정체</div>
+        ${identityRows || '<div style="color:#B0BEC5;font-size:13px;">투표 없음</div>'}
+        ${executedNote}
+        ${scoreTxt ? `<div class="result-line" style="color:#2E7D32;margin-top:10px;">🏆 획득: ${scoreTxt}</div>` : ''}
+        <button class="btn btn-org" style="margin-top:18px;" onclick="closeResult()">닫기 (점수 반영)</button>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+// ============================================================
+//  모둠(학생) 화면
+// ============================================================
+function renderStudent(){
+  const badge = document.getElementById('sPhase');
+  badge.style.display = '';   // 기본 표시 (빈 문구인 단계에선 아래에서 숨김)
+  const body = document.getElementById('sBody');
+  // 제목에 모둠명 + 본인 누적 점수 표시
+  const titleEl = document.getElementById('sTitle');
+  if(titleEl && ME) titleEl.textContent = `🕵️ ${memberName(ME)} ( ${MY_SCORE}점 )`;
+  // 발표 순서 (교사가 뽑았고 내가 포함되면 표시)
+  const orderEl = document.getElementById('sOrder');
+  if(orderEl){
+    const idx = ORDER.indexOf(ME);
+    if(idx >= 0){
+      orderEl.style.display = '';
+      orderEl.innerHTML = `<div style="background:#FFF3E0;border:2px solid #FFB74D;border-radius:12px;padding:10px;margin:10px 0;font-size:17px;color:#E65100;font-weight:bold;">📣 발표 순서 ${idx+1}번째 <span style="font-size:13px;color:#BF6000;font-weight:normal;">/ 총 ${ORDER.length}팀</span></div>`;
+    } else {
+      orderEl.style.display = 'none';
+    }
+  }
+  if(!GAME || !GAME.on){
+    badge.textContent = '교사의 시작을 기다려요';
+    body.innerHTML = '<div style="color:#B0BEC5;margin-top:16px;">🕐 대기 중…</div>';
+    document.getElementById('spyWordModal')?.remove();
+    return;
+  }
+  const phase = GAME.phase;
+  const inRound = (GAME.members||[]).includes(ME);   // 이번 판 참가자인가
+  if(phase !== 'result' && !inRound){
+    // 단어 발송 이후 뒤늦게 접속 → 이번 판엔 역할이 없음
+    badge.textContent = '⏳ 다음 판 대기';
+    body.innerHTML = `<div style="margin-top:16px;color:#90A4AE;font-size:14px;">이번 판은 이미 시작됐어요.<br>교사가 새 판을 시작하면 참여할 수 있어요.</div>`;
+    document.getElementById('spyWordModal')?.remove();
+    return;
+  }
+  if(phase === 'reveal'){
+    badge.textContent = '🙈 힌트를 확인하세요';
+    body.innerHTML = `<div style="margin-top:10px;">
+      <button class="btn btn-org" onclick="showMyHint()">🔎 내 힌트 보기</button>
+      <div style="color:#90A4AE;font-size:13px;margin-top:14px;">교사가 투표를 시작할 때까지 기다려요.</div>
+    </div>`;
+    autoShowHint();
+  } else if(phase === 'vote'){
+    document.getElementById('spyWordModal')?.remove();
+    const iVoted = MY_SUBMITTED || (_myVoteRound === GAME.round);   // 서버 기준(재접속 후 유지) + 로컬 즉시반영
+    const role = MY_PRIV && MY_PRIV.role;
+    badge.style.display = 'none';
+    if(iVoted){
+      body.innerHTML = `<div style="margin-top:16px;font-size:18px;color:#2E7D32;">✅ 제출 완료!</div>
+        <div style="color:#90A4AE;font-size:13px;margin-top:8px;">교사가 공개할 때까지 기다려요.</div>`;
+    } else if(role === 'spy'){
+      body.innerHTML = `<div style="margin-top:8px;color:#1565C0;font-size:15px;">🕵️ 당신은 스파이!<br>정답 <b>단어</b>를 맞혀보세요.</div>
+        <input id="voteInput" class="txt" style="margin-top:12px;" placeholder="단어 입력" autocomplete="off">
+        <button class="btn btn-blue" onclick="submitSpyGuess()">단어 제출</button>`;
+    } else if(role === 'fool'){
+      // 바보: 투표 때 정체 공개 + 진짜 단어 맞히기 (맞히면 승리)
+      body.innerHTML = `<div style="margin-top:8px;color:#D84315;font-size:15px;">🤡 사실 당신은 <b>바보</b>!<br>남들과 <b>다른 단어</b>를 받았어요.<br>진짜 <b>단어</b>를 맞히면 <b>승리</b>합니다!</div>
+        <input id="voteInput" class="txt" style="margin-top:12px;" placeholder="진짜 단어" autocomplete="off">
+        <button class="btn btn-blue" onclick="submitSpyGuess()">단어 제출</button>`;
+    } else {
+      body.innerHTML = `<div style="margin-top:8px;color:#444;font-size:15px;">의심 가는 <b>모둠 이름</b>을 적으세요.</div>
+        <input id="voteInput" class="txt" style="margin-top:12px;" placeholder="예: 0모둠" autocomplete="off">
+        <button class="btn btn-org" onclick="submitVote()">투표하기</button>`;
+    }
+  } else if(phase === 'result'){
+    document.getElementById('spyWordModal')?.remove();
+    badge.style.display = 'none';
+    body.innerHTML = `<div style="margin-top:16px;font-size:16px;color:#5D4037;">선생님이 결과를 알려줄게요! 👀</div>`;
+  }
+}
+
+let _hintShownRound = null;
+function autoShowHint(){
+  if(!GAME || GAME.phase !== 'reveal' || !MY_PRIV) return;
+  if(_hintShownRound === GAME.round) return;
+  _hintShownRound = GAME.round;
+  showMyHint();
+}
+function showMyHint(){
+  if(!MY_PRIV){ toast('힌트를 불러오는 중…'); return; }
+  const role = MY_PRIV.role;
+  let inner;
+  if(role === 'spy'){
+    // 단어를 모르는 스파이
+    const multi = (GAME && GAME.mode === 'normal' && GAME.spyCount > 1) ? '<br><span style="font-size:12px;color:#888;">스파이는 여러 명일 수 있어요.</span>' : '';
+    const hint = MY_PRIV.category
+      ? `카테고리: <b style="font-size:20px;color:#5D4037;">${escapeHtml(MY_PRIV.category)}</b><br>구체적인 단어는 <b>모릅니다</b>.`
+      : `힌트가 <b>없습니다</b>!<br>다른 모둠 얘기만 듣고 단어를 추측하세요.`;
+    inner = `<div style="font-size:22px;font-weight:bold;color:#1565C0;margin-bottom:6px;">🕵️ 당신은 스파이!</div>
+      <div style="font-size:15px;color:#444;line-height:1.7;">${hint}<br>자연스럽게 섞이세요!${multi}</div>`;
+  } else {
+    // 시민 또는 바보 — 바보는 자신이 바보인 줄 모르므로 시민과 동일하게 '제시어'만
+    inner = `<div style="font-size:16px;color:#5D4037;">제시어</div>
+      <div class="bigword">${escapeHtml(MY_PRIV.word)}</div>
+      <div style="font-size:12px;color:#888;">스파이를 찾아내세요!</div>`;
+  }
+  document.getElementById('spyWordModal')?.remove();
+  const html = `
+    <div class="modal-bg" id="spyWordModal">
+      <div class="modal">
+        <div class="hide-note">🙈 화면을 가리고 보세요!</div>
+        ${inner}
+        <button class="btn btn-org" style="margin-top:16px;" onclick="document.getElementById('spyWordModal').remove()">확인</button>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function submitVote(){
+  if(!GAME || GAME.phase !== 'vote') return;
+  const txt = (document.getElementById('voteInput').value||'').trim();
+  if(!txt){ toast('모둠 이름을 적어주세요'); return; }
+  const others = (GAME.members||[]).filter(u => u !== ME);
+  if(matchGroup(txt, [ME]) === ME){ toast('⚠️ 본인 모둠이에요'); return; }
+  const target = matchGroup(txt, others);
+  if(!target){ toast(`⚠️ '${txt}' 모둠을 못 찾았어요`); return; }
+  gref().child('votes/'+ME).set(target);
+  gref().child('submitted/'+ME).set(true);   // 완료 마커 (game 밖 별도 노드)
+  _myVoteRound = GAME.round;                  // 본인 표시는 로컬로
+  renderStudent();
+  toast(`👉 ${memberName(target)} 지목 완료`);
+}
+function submitSpyGuess(){
+  if(!GAME || GAME.phase !== 'vote') return;
+  const txt = (document.getElementById('voteInput').value||'').trim();
+  if(!txt){ toast('단어를 적어주세요'); return; }
+  gref().child('guesses/'+ME).set(txt);       // 추측도 별도 노드
+  gref().child('submitted/'+ME).set(true);
+  _myVoteRound = GAME.round;
+  renderStudent();
+  toast('📝 단어 제출 완료');
+}
+
+// ============================================================
+//  게임 설정 (교사) — 카테고리·스파이 인원·힌트 강약
+// ============================================================
+function openSettings(){
+  const st = getSettings();
+  const cats = Object.keys(getWords());
+  const selAll = !st.categories || !st.categories.length;
+  const catBoxes = cats.map(c => {
+    const on = selAll || st.categories.includes(c);
+    return `<label style="display:inline-flex;align-items:center;gap:5px;background:${on?'#FFF3E0':'#F5F5F5'};border:2px solid ${on?'#FFB74D':'#E0E0E0'};border-radius:10px;padding:6px 10px;margin:3px;cursor:pointer;font-size:13px;">
+      <input type="checkbox" class="setCat" value="${c}" ${on?'checked':''}> ${c}</label>`;
+  }).join('');
+  const spyOpt = n => `<label style="cursor:pointer;margin-right:16px;"><input type="radio" name="setSpy" value="${n}" ${((st.spyCount||1)===n)?'checked':''}> ${n}명</label>`;
+  const hintOpt = (v,l) => `<label style="cursor:pointer;margin-right:16px;"><input type="radio" name="setHint" value="${v}" ${((st.spyHint||'category')===v)?'checked':''}> ${l}</label>`;
+  const curMode = st.mode || 'normal';
+  const modeOpt = (v,l) => `<label style="cursor:pointer;margin-right:16px;"><input type="radio" name="setMode" value="${v}" ${(curMode===v)?'checked':''} onclick="_syncModeUI()"> ${l}</label>`;
+  document.getElementById('settingsModal')?.remove();
+  const html = `
+    <div class="modal-bg" id="settingsModal" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="width:min(520px,96vw);text-align:left;">
+        <div style="font-size:20px;color:#D84315;margin-bottom:12px;">🛠️ 게임 설정</div>
+
+        <div style="font-size:14px;color:#5D4037;margin-bottom:4px;">📚 출제 카테고리 (섞기)</div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px;">체크한 카테고리 중에서 랜덤 출제 (모두 해제 시 전체)</div>
+        <div id="setCatWrap" style="margin-bottom:16px;">${catBoxes}</div>
+
+        <div style="font-size:14px;color:#5D4037;margin-bottom:6px;">🎭 게임 모드</div>
+        <div style="margin-bottom:6px;">${modeOpt('normal','🕵️ 일반')}${modeOpt('fool','🤡 바보')}</div>
+        <div style="font-size:11px;color:#888;margin-bottom:16px;line-height:1.6;">
+          🕵️ <b>일반</b>: 스파이는 단어를 모름. 잡혀도 단어를 맞히면 스파이 승.<br>
+          🤡 <b>바보</b>: 1명만 <b>다른 단어</b>를 받아요. 투표 때 바보는 진짜 단어를 맞히면 승, 시민은 바보를 지목하면 승.
+        </div>
+
+        <div id="setSpyCntWrap" style="${curMode==='normal'?'':'display:none;'}">
+          <div style="font-size:14px;color:#5D4037;margin-bottom:6px;">🕵️ 스파이 인원 (일반 모드)</div>
+          <div style="margin-bottom:16px;">${spyOpt(1)}${spyOpt(2)}<span style="font-size:11px;color:#888;">(2명이면 모둠 4개 이상 필요)</span></div>
+        </div>
+
+        <div style="font-size:14px;color:#5D4037;margin-bottom:6px;">💡 스파이 힌트</div>
+        <div style="margin-bottom:8px;">${hintOpt('category','카테고리 제공 (쉬움)')}${hintOpt('none','힌트 없음 (어려움)')}</div>
+
+        <div class="row" style="margin-top:14px;">
+          <button class="btn btn-gray" onclick="document.getElementById('settingsModal').remove()">취소</button>
+          <button class="btn btn-org" onclick="saveSettingsFromUI()">💾 저장</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function _syncModeUI(){
+  const mode = document.querySelector('input[name="setMode"]:checked')?.value || 'normal';
+  const wrap = document.getElementById('setSpyCntWrap');
+  if(wrap) wrap.style.display = (mode === 'normal') ? '' : 'none';
+}
+function saveSettingsFromUI(){
+  const checked = [...document.querySelectorAll('.setCat:checked')].map(b => b.value);
+  const allCats = Object.keys(getWords());
+  const categories = (checked.length === 0 || checked.length === allCats.length) ? null : checked;
+  const spyCount = parseInt(document.querySelector('input[name="setSpy"]:checked')?.value || '1', 10);
+  const spyHint = document.querySelector('input[name="setHint"]:checked')?.value || 'category';
+  const mode = document.querySelector('input[name="setMode"]:checked')?.value || 'normal';
+  saveSettings({ categories, spyCount, spyHint, mode });
+  document.getElementById('settingsModal').remove();
+  toast('💾 설정을 저장했어요');
+}
+
+// ============================================================
+//  단어은행 편집기 (교사) — _liarWordEditor 포팅, localStorage 저장
+// ============================================================
+let _edWords = null, _edTopic = null;
+function openWordEditor(){
+  _edWords = JSON.parse(JSON.stringify(getWords()));
+  _edTopic = null;   // 첫 로드 시 빈 textarea가 첫 탭을 덮어쓰지 않도록 (edTab의 저장 가드 건너뜀)
+  const tabs = Object.keys(_edWords).map(t =>
+    `<button class="topictab" data-t="${t}" onclick="edTab('${t}')">${t}</button>`).join('');
+  document.getElementById('wordEditor')?.remove();
+  const html = `
+    <div class="modal-bg" id="wordEditor" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="width:min(560px,96vw);text-align:left;">
+        <div style="font-size:20px;color:#D84315;margin-bottom:6px;">⚙️ 단어은행 편집</div>
+        <div style="font-size:11px;color:#888;margin-bottom:10px;">카테고리별 단어를 한 줄에 하나씩. 스파이에겐 카테고리명만 보여요.</div>
+        <div class="tabbar" id="edTabs">${tabs}</div>
+        <textarea id="edArea" class="words"></textarea>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btn-gray" onclick="edReset()">↩️ 기본값</button>
+          <button class="btn btn-gray" onclick="document.getElementById('wordEditor').remove()">취소</button>
+          <button class="btn btn-org" onclick="edSave()">💾 저장</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  edTab(Object.keys(_edWords)[0]);
+}
+function edTab(t){
+  // 현재 탭 내용 메모리 저장
+  if(_edTopic){
+    const lines = (document.getElementById('edArea').value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+    _edWords[_edTopic] = lines;
+  }
+  _edTopic = t;
+  document.getElementById('edArea').value = (_edWords[t]||[]).join('\n');
+  document.querySelectorAll('#edTabs .topictab').forEach(b =>
+    b.classList.toggle('on', b.dataset.t === t));
+}
+function edReset(){
+  if(!_edTopic) return;
+  if(!confirm(`'${_edTopic}' 카테고리를 기본값으로 되돌릴까요?`)) return;
+  _edWords[_edTopic] = [...(DEFAULT_WORDS[_edTopic]||[])];
+  document.getElementById('edArea').value = _edWords[_edTopic].join('\n');
+}
+function edSave(){
+  if(_edTopic){
+    const lines = (document.getElementById('edArea').value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+    _edWords[_edTopic] = lines;
+  }
+  const out = {};
+  Object.keys(_edWords).forEach(t => {
+    out[t] = (_edWords[t] && _edWords[t].length) ? _edWords[t] : DEFAULT_WORDS[t];
+  });
+  try { localStorage.setItem('spyWords', JSON.stringify(out)); } catch(_){}
+  document.getElementById('wordEditor').remove();
+  toast('💾 저장 완료');
+}
+
+// ============================================================
+//  유틸
+// ============================================================
+function toast(msg){
+  document.getElementById('spyToast')?.remove();
+  const t = document.createElement('div');
+  t.id = 'spyToast'; t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2000);
+}
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+// Enter 로그인
+document.getElementById('loginId').addEventListener('keydown', e => {
+  if(e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>
